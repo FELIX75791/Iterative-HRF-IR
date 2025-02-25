@@ -27,15 +27,38 @@ import itertools
 import math
 from googleapiclient.discovery import build
 
-# A simple English stopword list.
-STOPWORDS = {
-    "the", "and", "of", "to", "a", "in", "is", "it", "you", "that", "he", "was",
-    "for", "on", "are", "as", "with", "his", "they", "i", "be", "at", "one",
-    "have", "this", "from", "or", "had", "by", "not", "word", "but", "what",
-    "some", "we", "can", "out", "other", "were", "all", "there", "when", "up",
-    "use", "your", "how", "said", "an", "each", "she", "which", "their", 
-    "will", "also", "do"
-}
+# Trying to use nltk library for tokenize and specify stopwords
+# other than manually listing stopwords
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+
+# ensure nltk data are correctly downloaded
+try:
+    stop_words = set(stopwords.words('english'))
+except LookupError:
+    nltk.download('stopwords')
+    stop_words = set(stopwords.words('english'))
+
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+
+try:
+    nltk.data.find('tokenizers/punkt_tab')
+except LookupError:
+    nltk.download('punkt_tab')
+
+# # A simple English stopword list.
+# STOPWORDS = {
+#     "the", "and", "of", "to", "a", "in", "is", "it", "you", "that", "he", "was",
+#     "for", "on", "are", "as", "with", "his", "they", "i", "be", "at", "one",
+#     "have", "this", "from", "or", "had", "by", "not", "word", "but", "what",
+#     "some", "we", "can", "out", "other", "were", "all", "there", "when", "up",
+#     "use", "your", "how", "said", "an", "each", "she", "which", "their", 
+#     "will", "also", "do"
+# }
 
 # Simple set of file extensions that we consider "non-HTML."
 NON_HTML_EXTENSIONS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"}
@@ -153,13 +176,20 @@ def compute_precision(results, relevance):
 
 
 def tokenize(text):
-    """
-    Very basic tokenizer: lowercases, splits on non-alpha, filters out stopwords.
-    TODO: maybe use some lib for tokenization
-    """
-    import re
-    tokens = re.split(r"[^a-zA-Z]+", text.lower())
-    tokens = [t for t in tokens if t and t not in STOPWORDS]
+    ## old way using manual listed stopwords and REGEX tokenization
+    # """
+    # Very basic tokenizer: lowercases, splits on non-alpha, filters out stopwords.
+    # TODO: maybe use some lib for tokenization
+    # """
+    # import re
+    # tokens = re.split(r"[^a-zA-Z]+", text.lower())
+    # tokens = [t for t in tokens if t and t not in STOPWORDS]
+    # return tokens
+    '''
+    UPDATE: now used nltk library
+    '''
+    tokens = word_tokenize(text.lower())
+    tokens = [t for t in tokens if t.isalpha() and t not in stop_words]
     return tokens
 
 
