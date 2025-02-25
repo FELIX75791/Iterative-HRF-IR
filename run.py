@@ -26,6 +26,8 @@ import pprint
 import itertools
 import math
 from googleapiclient.discovery import build
+import requests
+from bs4 import BeautifulSoup
 
 # Trying to use nltk library for tokenize and specify stopwords
 # other than manually listing stopwords
@@ -96,6 +98,28 @@ def is_likely_html(url):
         if url.endswith(ext):
             return False
     return True
+
+def fetch_full_text(url):
+    """
+    Fetch the full text from a URL by downloading and parsing the HTML.
+    Returns the extracted text or an empty string on failure.
+    """
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code != 200:
+            return ""
+        html = response.text
+        soup = BeautifulSoup(html, 'html.parser')
+        # Remove script and style elements
+        for script_or_style in soup(["script", "style"]):
+            script_or_style.decompose()
+        # Get text and join paragraphs
+        texts = soup.stripped_strings
+        full_text = " ".join(texts)
+        return full_text
+    except Exception as e:
+        print(f"Error fetching full text from {url}: {e}")
+        return ""
 
 
 def search_query(service, engine_id, query, num_results=10):
@@ -193,7 +217,7 @@ def tokenize(text):
     return tokens
 
 
-def build_tfidf_index(results):
+def build_tfidf_index(results, use_full_text = False):
     """
     Build a small TF-IDF index for the top-10 documents (title+snippet).
     Return:
@@ -211,8 +235,13 @@ def build_tfidf_index(results):
             docs_tokens.append({})
             continue
 
-        # Combine title + snippet for indexing
-        text = title + " " + snippet
+        if use_full_text:
+            full_text = fetch_full_text(link)
+            # Combine title and full text
+            text = title + " " + full_text
+        else:
+            text = title + " " + snippet
+
         tokens = tokenize(text)
         tf_map = {}
         for t in tokens:
@@ -331,7 +360,7 @@ def main():
             break
 
         # 5. Build TF-IDF index for these 10 results
-        docs_tokens, df = build_tfidf_index(results)
+        docs_tokens, df = build_tfidf_index(results, True)
 
         # 6. Compute sum of TF-IDF for each term across relevant docs only
         sum_tfidf = compute_sum_tfidf(docs_tokens, df, relevance)
