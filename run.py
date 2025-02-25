@@ -255,56 +255,134 @@ def build_tfidf_index(results, use_full_text = False):
 
     return docs_tokens, df
 
-
-def compute_sum_tfidf(docs_tokens, df, relevance):
+def compute_doc_vector(tf_map, N, df):
     """
-    Compute the sum of TF-IDF scores per term, but only over the relevant docs.
-    If doc i is relevant, we add doc i's tf-idf for each term to the global sum.
+    Compute a normalized TF-IDF vector for a single document.
+    """
+    vector = {}
+    for term, tf in tf_map.items():
+        if term in df and df[term] > 0:
+            vector[term] = tf * math.log(float(N) / df[term], 2)
+    return vector
+
+def pick_new_terms_rocchio(current_query_terms, docs_tokens, df, relevance, max_new_terms = 2, alpha = 1.0, beta = 0.75, gamma = 0.15):
+    """
+    Use Rocchio algorithm to select new query expansion terms.
+    input: alpha, beta, gamma: Rocchio parameters.
+    Returns a list of new terms with the highest Rocchio scores.
+    """
+    N = len(docs_tokens)
     
-    Returns a dict: {term: sum_of_tfidf_over_relevant_docs}
-    """
-    N = len(docs_tokens)  # Typically 10
-    sum_tfidf = {}
+    # Build the current query vector.
+    Q0 = {}
+    for term in current_query_terms:
+        term = term.lower()
+        Q0[term] = Q0.get(term, 0) + 1.0
 
-    for doc_idx, tf_map in enumerate(docs_tokens):
-        if doc_idx >= len(relevance):
-            break
-        if not relevance[doc_idx]:
-            continue  # Only sum from relevant docs
+    # Accumulate document vectors for both the relevant and irrelevant documents.
+    relevant_vec = {}
+    non_relevant_vec = {}
+    num_rel = 0
+    num_non_rel = 0
 
-        # For each term in this doc
-        for term, tf in tf_map.items():
-            # Document frequency
-            df_t = df.get(term, 0)
-            if df_t == 0:
-                # Should not happen if the term is in the doc, but just in case
-                continue
+    for idx, tf_map in enumerate(docs_tokens):
+        doc_vector = compute_doc_vector(tf_map, N, df)
+        if idx >= len(relevance):
+            continue
+        if relevance[idx]:
+            num_rel += 1
+            for term, weight in doc_vector.items():
+                relevant_vec[term] = relevant_vec.get(term, 0.0) + weight
+        else:
+            num_non_rel += 1
+            for term, weight in doc_vector.items():
+                non_relevant_vec[term] = non_relevant_vec.get(term, 0.0) + weight
 
-            # TF-IDF weighting
-            # We use raw TF (no normalization by doc length), 
-            #   multiplied by log(N / df_t) same as lecture
-            tfidf_val = tf * math.log(float(N) / df_t, 2) 
-            sum_tfidf[term] = sum_tfidf.get(term, 0.0) + tfidf_val
+    # Average the vectors.
+    if num_rel > 0:
+        for term in relevant_vec:
+            relevant_vec[term] /= num_rel
+    if num_non_rel > 0:
+        for term in non_relevant_vec:
+            non_relevant_vec[term] /= num_non_rel
 
-    return sum_tfidf
+    # Compute the new query vector using Rocchio's formula:
+    # Q_new = alpha * Q0 + beta * (average relevant doc vector) - gamma * (average non-relevant doc vector)
+    new_query_vec = {}
+    # Add original query terms.
+    for term, weight in Q0.items():
+        new_query_vec[term] = alpha * weight
+    # Add contribution from relevant docs.
+    for term, weight in relevant_vec.items():
+        new_query_vec[term] = new_query_vec.get(term, 0.0) + beta * weight
+    # Subtract contribution from non-relevant docs.
+    for term, weight in non_relevant_vec.items():
+        new_query_vec[term] = new_query_vec.get(term, 0.0) - gamma * weight
 
-
-def pick_new_terms(current_query_terms, sum_tfidf, max_new_terms=2):
-    """
-    Pick up to 'max_new_terms' terms with highest sum_tfidf scores that 
-    are not already in the query.
-    """
-    # Sort terms by descending TF-IDF
-    sorted_terms = sorted(sum_tfidf.items(), key=lambda x: x[1], reverse=True)
-
+    # Filter out terms already in the current query.
     current_set = set(t.lower() for t in current_query_terms)
+    candidate_terms = [(term, score) for term, score in new_query_vec.items() if term not in current_set]
+    candidate_terms.sort(key=lambda x: x[1], reverse=True)
+
+    # Pick up to max_new_terms
     new_terms = []
-    for term, score in sorted_terms:
-        if term not in current_set:
+    for term, score in candidate_terms:
+        if score > 0:
             new_terms.append(term)
-        if len(new_terms) == max_new_terms:
+        if len(new_terms) >= max_new_terms:
             break
+
     return new_terms
+
+# def compute_sum_tfidf(docs_tokens, df, relevance):
+#     """
+#     Compute the sum of TF-IDF scores per term, but only over the relevant docs.
+#     If doc i is relevant, we add doc i's tf-idf for each term to the global sum.
+    
+#     Returns a dict: {term: sum_of_tfidf_over_relevant_docs}
+#     """
+#     N = len(docs_tokens)  # Typically 10
+#     sum_tfidf = {}
+
+#     for doc_idx, tf_map in enumerate(docs_tokens):
+#         if doc_idx >= len(relevance):
+#             break
+#         if not relevance[doc_idx]:
+#             continue  # Only sum from relevant docs
+
+#         # For each term in this doc
+#         for term, tf in tf_map.items():
+#             # Document frequency
+#             df_t = df.get(term, 0)
+#             if df_t == 0:
+#                 # Should not happen if the term is in the doc, but just in case
+#                 continue
+
+#             # TF-IDF weighting
+#             # We use raw TF (no normalization by doc length), 
+#             #   multiplied by log(N / df_t) same as lecture
+#             tfidf_val = tf * math.log(float(N) / df_t, 2) 
+#             sum_tfidf[term] = sum_tfidf.get(term, 0.0) + tfidf_val
+
+#     return sum_tfidf
+
+
+# def pick_new_terms(current_query_terms, sum_tfidf, max_new_terms=2):
+#     """
+#     Pick up to 'max_new_terms' terms with highest sum_tfidf scores that 
+#     are not already in the query.
+#     """
+#     # Sort terms by descending TF-IDF
+#     sorted_terms = sorted(sum_tfidf.items(), key=lambda x: x[1], reverse=True)
+
+#     current_set = set(t.lower() for t in current_query_terms)
+#     new_terms = []
+#     for term, score in sorted_terms:
+#         if term not in current_set:
+#             new_terms.append(term)
+#         if len(new_terms) == max_new_terms:
+#             break
+#     return new_terms
 
 
 def reorder_query(terms):
@@ -363,10 +441,11 @@ def main():
         docs_tokens, df = build_tfidf_index(results, True)
 
         # 6. Compute sum of TF-IDF for each term across relevant docs only
-        sum_tfidf = compute_sum_tfidf(docs_tokens, df, relevance)
+        ##sum_tfidf = compute_sum_tfidf(docs_tokens, df, relevance)
 
         # 7. Pick up to 2 new terms not already in the query
-        new_terms = pick_new_terms(current_query_terms, sum_tfidf, max_new_terms=2)
+        ##new_terms = pick_new_terms(current_query_terms, sum_tfidf, max_new_terms=2)
+        new_terms = pick_new_terms_rocchio(current_query_terms, docs_tokens, df, relevance, max_new_terms=2)
         if not new_terms:
             print("No new terms to add. Stopping.")
             break
