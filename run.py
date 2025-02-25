@@ -259,10 +259,14 @@ def compute_doc_vector(tf_map, N, df):
     """
     Compute a normalized TF-IDF vector for a single document.
     """
+    total_terms = sum(tf_map.values())
     vector = {}
+    if total_terms == 0:
+        return vector
     for term, tf in tf_map.items():
         if term in df and df[term] > 0:
-            vector[term] = tf * math.log(float(N) / df[term], 2)
+            normalized_tf = tf / total_terms
+            vector[term] = normalized_tf * math.log(float(N) / df[term], 2)
     return vector
 
 def pick_new_terms_rocchio(current_query_terms, docs_tokens, df, relevance, max_new_terms = 2, alpha = 1.0, beta = 0.75, gamma = 0.15):
@@ -287,7 +291,7 @@ def pick_new_terms_rocchio(current_query_terms, docs_tokens, df, relevance, max_
 
     for idx, tf_map in enumerate(docs_tokens):
         doc_vector = compute_doc_vector(tf_map, N, df)
-        if idx >= len(relevance):
+        if not tf_map:
             continue
         if relevance[idx]:
             num_rel += 1
