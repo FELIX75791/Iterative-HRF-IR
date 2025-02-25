@@ -194,18 +194,9 @@ def compute_precision(results, relevance):
 
 
 def tokenize(text):
-    # old way using manual listed stopwords and REGEX tokenization
-    # """
-    # Very basic tokenizer: lowercases, splits on non-alpha, filters out stopwords.
-    # TODO: maybe use some lib for tokenization
-    # """
-    # import re
-    # tokens = re.split(r"[^a-zA-Z]+", text.lower())
-    # tokens = [t for t in tokens if t and t not in STOPWORDS]
-    # return tokens
-    '''
-    UPDATE: now used nltk library
-    '''
+    """
+    Now use nltk library for tokenization
+    """
     tokens = word_tokenize(text.lower())
     tokens = [t for t in tokens if t.isalpha() and t not in stop_words]
     return tokens
@@ -355,7 +346,7 @@ def main():
     while True:
         print(f"\n==================== Iteration {
               iteration} ====================")
-        # Reorder terms (if you have a more advanced method, adapt here)
+        # Reorder terms
         current_query_terms = reorder_query(current_query_terms)
 
         query_str = " ".join(current_query_terms)
@@ -373,7 +364,7 @@ def main():
             print("No results retrieved. Stopping.")
             break
 
-        # Display the results
+        # Display the results (Optional)
         # display_results(results)
 
         # 2. Get user feedback (y/n)
