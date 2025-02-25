@@ -52,18 +52,10 @@ try:
 except LookupError:
     nltk.download('punkt_tab')
 
-# # A simple English stopword list.
-# STOPWORDS = {
-#     "the", "and", "of", "to", "a", "in", "is", "it", "you", "that", "he", "was",
-#     "for", "on", "are", "as", "with", "his", "they", "i", "be", "at", "one",
-#     "have", "this", "from", "or", "had", "by", "not", "word", "but", "what",
-#     "some", "we", "can", "out", "other", "were", "all", "there", "when", "up",
-#     "use", "your", "how", "said", "an", "each", "she", "which", "their", 
-#     "will", "also", "do"
-# }
-
 # Simple set of file extensions that we consider "non-HTML."
-NON_HTML_EXTENSIONS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"}
+NON_HTML_EXTENSIONS = {".pdf", ".doc",
+                       ".docx", ".ppt", ".pptx", ".xls", ".xlsx"}
+
 
 def parse_args():
     if len(sys.argv) != 5:
@@ -98,6 +90,7 @@ def is_likely_html(url):
         if url.endswith(ext):
             return False
     return True
+
 
 def fetch_full_text(url):
     """
@@ -190,7 +183,8 @@ def compute_precision(results, relevance):
     If 10 documents were returned but only 8 are HTML, we compute
     (# relevant_html) / (number_of_html_docs).
     """
-    html_docs = [(res, rel) for (res, rel) in zip(results, relevance) if res[3] is True]
+    html_docs = [(res, rel)
+                 for (res, rel) in zip(results, relevance) if res[3] is True]
     if not html_docs:
         return 0.0  # No HTML docs => precision = 0
 
@@ -200,7 +194,7 @@ def compute_precision(results, relevance):
 
 
 def tokenize(text):
-    ## old way using manual listed stopwords and REGEX tokenization
+    # old way using manual listed stopwords and REGEX tokenization
     # """
     # Very basic tokenizer: lowercases, splits on non-alpha, filters out stopwords.
     # TODO: maybe use some lib for tokenization
@@ -217,7 +211,7 @@ def tokenize(text):
     return tokens
 
 
-def build_tfidf_index(results, use_full_text = False):
+def build_tfidf_index(results, use_full_text=False):
     """
     Build a small TF-IDF index for the top-10 documents (title+snippet).
     Return:
@@ -255,6 +249,7 @@ def build_tfidf_index(results, use_full_text = False):
 
     return docs_tokens, df
 
+
 def compute_doc_vector(tf_map, N, df):
     """
     Compute a normalized TF-IDF vector for a single document.
@@ -269,14 +264,15 @@ def compute_doc_vector(tf_map, N, df):
             vector[term] = normalized_tf * math.log(float(N) / df[term], 2)
     return vector
 
-def pick_new_terms_rocchio(current_query_terms, docs_tokens, df, relevance, max_new_terms = 2, alpha = 1.0, beta = 0.75, gamma = 0.15):
+
+def pick_new_terms_rocchio(current_query_terms, docs_tokens, df, relevance, max_new_terms=2, alpha=1.0, beta=0.75, gamma=0.15):
     """
     Use Rocchio algorithm to select new query expansion terms.
     input: alpha, beta, gamma: Rocchio parameters.
     Returns a list of new terms with the highest Rocchio scores.
     """
     N = len(docs_tokens)
-    
+
     # Build the current query vector.
     Q0 = {}
     for term in current_query_terms:
@@ -300,7 +296,8 @@ def pick_new_terms_rocchio(current_query_terms, docs_tokens, df, relevance, max_
         else:
             num_non_rel += 1
             for term, weight in doc_vector.items():
-                non_relevant_vec[term] = non_relevant_vec.get(term, 0.0) + weight
+                non_relevant_vec[term] = non_relevant_vec.get(
+                    term, 0.0) + weight
 
     # Average the vectors.
     if num_rel > 0:
@@ -325,7 +322,8 @@ def pick_new_terms_rocchio(current_query_terms, docs_tokens, df, relevance, max_
 
     # Filter out terms already in the current query.
     current_set = set(t.lower() for t in current_query_terms)
-    candidate_terms = [(term, score) for term, score in new_query_vec.items() if term not in current_set]
+    candidate_terms = [(term, score) for term,
+                       score in new_query_vec.items() if term not in current_set]
     candidate_terms.sort(key=lambda x: x[1], reverse=True)
 
     # Pick up to max_new_terms
@@ -337,56 +335,6 @@ def pick_new_terms_rocchio(current_query_terms, docs_tokens, df, relevance, max_
             break
 
     return new_terms
-
-# def compute_sum_tfidf(docs_tokens, df, relevance):
-#     """
-#     Compute the sum of TF-IDF scores per term, but only over the relevant docs.
-#     If doc i is relevant, we add doc i's tf-idf for each term to the global sum.
-    
-#     Returns a dict: {term: sum_of_tfidf_over_relevant_docs}
-#     """
-#     N = len(docs_tokens)  # Typically 10
-#     sum_tfidf = {}
-
-#     for doc_idx, tf_map in enumerate(docs_tokens):
-#         if doc_idx >= len(relevance):
-#             break
-#         if not relevance[doc_idx]:
-#             continue  # Only sum from relevant docs
-
-#         # For each term in this doc
-#         for term, tf in tf_map.items():
-#             # Document frequency
-#             df_t = df.get(term, 0)
-#             if df_t == 0:
-#                 # Should not happen if the term is in the doc, but just in case
-#                 continue
-
-#             # TF-IDF weighting
-#             # We use raw TF (no normalization by doc length), 
-#             #   multiplied by log(N / df_t) same as lecture
-#             tfidf_val = tf * math.log(float(N) / df_t, 2) 
-#             sum_tfidf[term] = sum_tfidf.get(term, 0.0) + tfidf_val
-
-#     return sum_tfidf
-
-
-# def pick_new_terms(current_query_terms, sum_tfidf, max_new_terms=2):
-#     """
-#     Pick up to 'max_new_terms' terms with highest sum_tfidf scores that 
-#     are not already in the query.
-#     """
-#     # Sort terms by descending TF-IDF
-#     sorted_terms = sorted(sum_tfidf.items(), key=lambda x: x[1], reverse=True)
-
-#     current_set = set(t.lower() for t in current_query_terms)
-#     new_terms = []
-#     for term, score in sorted_terms:
-#         if term not in current_set:
-#             new_terms.append(term)
-#         if len(new_terms) == max_new_terms:
-#             break
-#     return new_terms
 
 
 def reorder_query(terms):
@@ -405,7 +353,8 @@ def main():
     iteration = 1
 
     while True:
-        print(f"\n==================== Iteration {iteration} ====================")
+        print(f"\n==================== Iteration {
+              iteration} ====================")
         # Reorder terms (if you have a more advanced method, adapt here)
         current_query_terms = reorder_query(current_query_terms)
 
@@ -413,7 +362,8 @@ def main():
         print(f"Current query: {query_str}")
 
         # 1. Retrieve top-10 results
-        results = search_query(service, google_engine_id, query_str, num_results=10)
+        results = search_query(service, google_engine_id,
+                               query_str, num_results=10)
         if len(results) < 10 and iteration == 1:
             # As instructions say, if fewer than 10 results in first iteration, just stop
             print("Fewer than 10 results returned in the first iteration. Stopping.")
@@ -424,7 +374,7 @@ def main():
             break
 
         # Display the results
-        display_results(results)
+        # display_results(results)
 
         # 2. Get user feedback (y/n)
         relevance = get_relevance_feedback(results)
@@ -435,27 +385,25 @@ def main():
 
         # 4. Check stopping conditions
         if precision >= target_precision:
-            print(f"Desired precision {target_precision} reached or exceeded. Stopping.")
+            print(f"Desired precision {
+                  target_precision} reached or exceeded. Stopping.")
             break
         if precision == 0.0:
             print("Precision is 0 => no relevant results among top-10. Stopping.")
             break
 
-        # 5. Build TF-IDF index for these 10 results
+        # 5. Compute Raw TF and DF index for these 10 results
         docs_tokens, df = build_tfidf_index(results, True)
 
-        # 6. Compute sum of TF-IDF for each term across relevant docs only
-        ##sum_tfidf = compute_sum_tfidf(docs_tokens, df, relevance)
-
-        # 7. Pick up to 2 new terms not already in the query
-        ##new_terms = pick_new_terms(current_query_terms, sum_tfidf, max_new_terms=2)
-        new_terms = pick_new_terms_rocchio(current_query_terms, docs_tokens, df, relevance, max_new_terms=2)
+        # 6. Pick up to 2 new terms not already in the query
+        new_terms = pick_new_terms_rocchio(
+            current_query_terms, docs_tokens, df, relevance, max_new_terms=2)
         if not new_terms:
             print("No new terms to add. Stopping.")
             break
 
         print(f"Expanding query with new terms: {new_terms}")
-        # 8. Expand current query
+        # 7. Expand current query
         current_query_terms.extend(new_terms)
 
         iteration += 1
