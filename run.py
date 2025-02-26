@@ -32,8 +32,15 @@ from bs4 import BeautifulSoup
 # Trying to use nltk library for tokenize and specify stopwords
 # other than manually listing stopwords
 import nltk
+nltk.download('brown')
+
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
+from nltk.corpus import brown
+from nltk import bigrams, FreqDist
+
+
+bigram_freq = FreqDist(bigrams(brown.words()))
 
 # ensure nltk data are correctly downloaded
 try:
@@ -330,9 +337,14 @@ def pick_new_terms_rocchio(current_query_terms, docs_tokens, df, relevance, max_
 
 def reorder_query(terms):
     """
-    TODO: I have not think of a good way to implement this yet
+    Use a corpus-based approach with NLTK to rank new terms
     """
-    return terms
+    word1 = terms[0]
+    word2 = terms[1]
+    phrase1_freq = bigram_freq[(word1, word2)]
+    phrase2_freq = bigram_freq[(word2, word1)]
+
+    return terms if phrase1_freq >= phrase2_freq else [word2, word1]
 
 
 def main():
@@ -344,10 +356,7 @@ def main():
     iteration = 1
 
     while True:
-        print(f"\n==================== Iteration {
-              iteration} ====================")
-        # Reorder terms
-        current_query_terms = reorder_query(current_query_terms)
+        print(f"\n==================== Iteration {iteration} ====================")
 
         query_str = " ".join(current_query_terms)
         print(f"Current query: {query_str}")
@@ -376,8 +385,7 @@ def main():
 
         # 4. Check stopping conditions
         if precision >= target_precision:
-            print(f"Desired precision {
-                  target_precision} reached or exceeded. Stopping.")
+            print(f"Desired precision {target_precision} reached or exceeded. Stopping.")
             break
         if precision == 0.0:
             print("Precision is 0 => no relevant results among top-10. Stopping.")
@@ -393,8 +401,11 @@ def main():
             print("No new terms to add. Stopping.")
             break
 
+        # 7. Reorder the newly added terms
+        new_terms = reorder_query(new_terms)
+        
         print(f"Expanding query with new terms: {new_terms}")
-        # 7. Expand current query
+        # 8. Expand current query
         current_query_terms.extend(new_terms)
 
         iteration += 1
