@@ -221,28 +221,34 @@ def build_tfidf_index(results, use_full_text=False):
     df = {}
     docs_tokens = []
 
+    # Process each search result
     for (title, link, snippet, is_html) in results:
         if not is_html:
-            # Skip non-HTML docs for indexing
+            # Skip non-HTML documents by appending an empty dictionary
             docs_tokens.append({})
             continue
 
         if use_full_text:
+            # Fetch and use the full text from the webpage
             full_text = fetch_full_text(link)
-            # Combine title and full text
+            # Combine title and full text for a more comprehensive text representation
             text = title + " " + full_text
         else:
+            # Use title and snippet as the text source
             text = title + " " + snippet
 
+        # Tokenize the combined text using nltk
         tokens = tokenize(text)
         tf_map = {}
+        # Create a term frequency map for the current document
         for t in tokens:
             tf_map[t] = tf_map.get(t, 0) + 1
 
-        # Update DF
+        # Update the global document frequency (DF) for each unique term
         for term in set(tokens):
             df[term] = df.get(term, 0) + 1
 
+        # Append the term frequency map to the list of document tokens
         docs_tokens.append(tf_map)
 
     return docs_tokens, df
@@ -252,13 +258,19 @@ def compute_doc_vector(tf_map, N, df):
     """
     Compute a normalized TF-IDF vector for a single document.
     """
+    # Calculate the total number of terms in the document for normalization
     total_terms = sum(tf_map.values())
     vector = {}
+
+    # If there are no terms, return an empty vector
     if total_terms == 0:
         return vector
+    
+    # For each term in the document, calculate the normalized TF-IDF weight
     for term, tf in tf_map.items():
         if term in df and df[term] > 0:
-            normalized_tf = tf / total_terms
+            normalized_tf = tf / total_terms # Normalized term frequency
+            # Multiply by the logarithmic inverse document frequency
             vector[term] = normalized_tf * math.log(float(N) / df[term], 2)
     return vector
 
@@ -284,15 +296,22 @@ def pick_new_terms_rocchio(current_query_terms, docs_tokens, df, relevance, max_
     num_non_rel = 0
 
     for idx, tf_map in enumerate(docs_tokens):
+        # Compute the normalized TF-IDF vector for the current document
         doc_vector = compute_doc_vector(tf_map, N, df)
+
+        # If the document is empty (e.g., non-HTML or no tokens), skip further processing
         if not tf_map:
             continue
+
+        # Check user feedback: if the document is marked as relevant
         if relevance[idx]:
-            num_rel += 1
+            num_rel += 1 # Increment count of relevant documents
+            # Accumulate term weights for the relevant documents
             for term, weight in doc_vector.items():
                 relevant_vec[term] = relevant_vec.get(term, 0.0) + weight
         else:
-            num_non_rel += 1
+            num_non_rel += 1 # Increment count of non-relevant documents
+            # Accumulate term weights for the non-relevant documents
             for term, weight in doc_vector.items():
                 non_relevant_vec[term] = non_relevant_vec.get(
                     term, 0.0) + weight
@@ -341,9 +360,12 @@ def reorder_query(terms):
     """
     word1 = terms[0]
     word2 = terms[1]
+    
+    # Retrieve bigram frequency counts for both possible orders
     phrase1_freq = bigram_freq[(word1, word2)]
     phrase2_freq = bigram_freq[(word2, word1)]
 
+    # Return the order that has a higher bigram frequency
     return terms if phrase1_freq >= phrase2_freq else [word2, word1]
 
 
