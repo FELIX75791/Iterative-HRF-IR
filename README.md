@@ -11,6 +11,7 @@ Ken Deng, UNI: kd3005 (kd3005@columbia.edu)
 run.py
 requirements.txt
 README.md
+transcript.txt
 ```
 
 
